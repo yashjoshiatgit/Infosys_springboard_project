@@ -13,5 +13,15 @@ public class User {
     private String username;
     private String password;
     private String role = "RESIDENT";
+    private String name;
+    private String phoneNumber;
+    private String societyName;
+    private String city;
+    private String district;
+    private String postal;
+
+    public String getRoles() {
+        return role;
+    }
 }
 

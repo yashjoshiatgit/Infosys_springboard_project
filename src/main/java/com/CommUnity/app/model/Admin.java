@@ -13,5 +13,11 @@ public class Admin {
     private String username;
     private String password;
     private String role = "ADMIN";
+    //Additional Information
+    private String name;
+    private String phoneNumber;
+    private String societyName;
+    private String flatNumber;
+    private String postal;
 }
 
