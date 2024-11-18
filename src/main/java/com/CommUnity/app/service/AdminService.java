@@ -2,51 +2,61 @@ package com.CommUnity.app.service;
 
 import com.CommUnity.app.model.Admin;
 import com.CommUnity.app.repository.AdminRepository;
+import com.CommUnity.app.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 
 @Service
-public class AdminService {
+public class AdminService implements UserDetailsService {
+
+    private static final Logger logger = LoggerFactory.getLogger(AdminService.class);
+
     private final AdminRepository adminRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     @Autowired
-    public AdminService(AdminRepository adminRepository) {
+    public AdminService(AdminRepository adminRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.adminRepository = adminRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
     }
 
-    public String saveAdmin(Admin admin, Function<String, String> passwordEncoder) {
-        if (adminRepository.findByUsername(admin.getUsername()).isPresent()) {
-            return "Username already exists. Please choose a different username.";
-        }
-
-        if (!isValidPassword(admin.getPassword())) {
-            return "Password must be at least 8 characters long.";
-        }
-
-        if (admin.getPhoneNumber() == null || admin.getPostal() == null) {
-            return "Phone number and postal code are mandatory.";
-        }
-
-        admin.setPassword(passwordEncoder.apply(admin.getPassword()));
+    public String saveAdmin(Admin admin) {
+        admin.setPassword(passwordEncoder.encode(admin.getPassword()));
         adminRepository.save(admin);
-        return "Sign-up successful! Please sign in.";
+        logger.info("Admin registered successfully: {}", admin.getUsername());
+        return "Admin registered successfully!";
+    }
+
+    public String authenticate(String username, String password) {
+        logger.info("Attempting to authenticate admin: {}", username);
+        Optional<Admin> admin = adminRepository.findByUsername(username);
+        if (admin.isPresent() && passwordEncoder.matches(password, admin.get().getPassword())) {
+            logger.info("Admin authenticated successfully.");
+            return jwtUtil.generateToken(username);
+        } else {
+            logger.warn("Authentication failed for admin: {}", username);
+            return null;
+        }
     }
 
 
-    private boolean isValidPassword(String password) {
-        // Check password length and complexity
-        String passwordRegex = "^(?=.*[0-9])(?=.*[a-zA-Z]).{8,}$";
-        return Pattern.compile(passwordRegex).matcher(password).matches();
-    }
-
-    public Optional<Admin> authenticate(String username, String password) {
-        return adminRepository.findByUsername(username)
-                .filter(admin -> admin.getPassword().equals(password));
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        Admin admin = adminRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Admin not found: " + username));
+        return new org.springframework.security.core.userdetails.User(admin.getUsername(), admin.getPassword(),
+                Collections.singletonList(new SimpleGrantedAuthority(admin.getRole())));
     }
 }
-
-

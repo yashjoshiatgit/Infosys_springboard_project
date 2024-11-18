@@ -1,10 +1,12 @@
-package com.CommUnity.app.repository;
+    package com.CommUnity.app.repository;
 
+    import com.CommUnity.app.model.Admin;
+    import org.springframework.data.mongodb.repository.MongoRepository;
+    import java.util.Optional;
 
-import com.CommUnity.app.model.Admin;
-import org.springframework.data.mongodb.repository.MongoRepository;
-import java.util.Optional;
-
-public interface AdminRepository extends MongoRepository<Admin, String> {
-    Optional<Admin> findByUsername(String username);
-}
+    /**
+     * Repository for Admin entity with MongoDB.
+     */
+    public interface AdminRepository extends MongoRepository<Admin, String> {
+        Optional<Admin> findByUsername(String username);
+    }

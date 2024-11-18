@@ -2,49 +2,60 @@ package com.CommUnity.app.service;
 
 import com.CommUnity.app.model.User;
 import com.CommUnity.app.repository.UserRepository;
+import com.CommUnity.app.security.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.regex.Pattern;
 
 @Service
-public class UserService {
+public class UserService implements UserDetailsService {
+
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final JwtUtil jwtUtil;
 
     @Autowired
-    public UserService(UserRepository userRepository) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.jwtUtil = jwtUtil;
     }
 
-    public String saveUser(User user, Function<String, String> passwordEncoder) {
-        if (userRepository.findByUsername(user.getUsername()).isPresent()) {
-            return "Username already exists. Please choose a different username.";
-        }
-
-        if (!isValidPassword(user.getPassword())) {
-            return "Password must be at least 8 characters long and include a mix of letters and numbers.";
-        }
-
-        if (user.getPhoneNumber() == null || user.getPostal() == null) {
-            return "Phone number and postal code are mandatory.";
-        }
-
-        user.setPassword(passwordEncoder.apply(user.getPassword()));
+    public String saveUser(User user) {
+        user.setPassword(passwordEncoder.encode(user.getPassword()));
         userRepository.save(user);
-        return "Sign-up successful! Please sign in.";
+        logger.info("User registered successfully: {}", user.getUsername());
+        return "User registered successfully!";
     }
 
-
-    private boolean isValidPassword(String password) {
-        // Check password length and complexity (at least 8 characters, including one digit)
-        String passwordRegex = "^(?=.*[0-9])(?=.*[a-zA-Z]).{8,}$";
-        return Pattern.compile(passwordRegex).matcher(password).matches();
+    public String authenticate(String username, String password) {
+        logger.info("Attempting to authenticate user: {}", username);
+        Optional<User> user = userRepository.findByUsername(username);
+        if (user.isPresent() && passwordEncoder.matches(password, user.get().getPassword())) {
+            logger.info("User authenticated successfully.");
+            return jwtUtil.generateToken(username);
+        } else {
+            logger.warn("Authentication failed for user: {}", username);
+            return null;
+        }
     }
 
-    public Optional<User> authenticate(String username, String password) {
-        return userRepository.findByUsername(username)
-                .filter(user -> user.getPassword().equals(password));
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
+        return new org.springframework.security.core.userdetails.User(user.getUsername(), user.getPassword(),
+                Collections.singletonList(new SimpleGrantedAuthority(user.getRole())));
     }
 }
